@@ -5,6 +5,7 @@
 - Input problem file name (ex: problem3.txt)
 
 ## to-do
+- Steps output
 - Improve move-prob (currently random)
 - Improve documentation
 - Make GUI
