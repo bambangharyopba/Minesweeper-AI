@@ -2,71 +2,70 @@
 ;;; DEFTEMPLATES & DEFFACTS
 ;;; #######################
 
+;; Cell Template
 (deftemplate cell
     (slot id) ;; cell id
     (slot row)
     (slot column)
 )
 
+;; Value of Cell Template
 (deftemplate cell-value
     (slot id) ;; cell id
     (slot value)
 )
 
+;; Cell Check Statement
 (deftemplate check-cell
     (slot row)
     (slot column)
 )
 
+;; Selected Cell
 (deftemplate move
     (slot id) ;; cell id
 )
 
+;; Available Move
 (deftemplate move-pool
     (multislot id) ;; cell id
 )
 
+;; Last Used Move
 (deftemplate last-move
     (slot id) ;; cell id
 )
 
+;; Flagged Mine
 (deftemplate mark-mine
     (slot id) ;;; cell id
 )
 
-(deftemplate win-counter
-    (slot count)
-)
-
+;; Safe Marked Cell
 (deftemplate mark-safe
     (slot id) ;;; cell id
 )
 
+;; Sentence Cell (ex: {A, B, C, D}) used to make sentence
 (deftemplate sentence-cell
     (multislot id) ;; cell ids
 )
 
-(deftemplate last-sentence
-    (slot idx) ;; sentence id
-)
-
-(deftemplate sentence-counter
-    (slot idx) ;; sentence id
-)
-
+;; Sentence (ex: {A, B, C} = 2)
 (deftemplate sentence
     (multislot id) ;; cell ids
     (slot count) ;; mine-count  
 )
 
+;; Problem Generated Mine
 (deftemplate mine
     (slot row)
     (slot column)
 )
 
-;;; ###########
-;;; SETUP RULES
-;;; ###########
+;;; #########################
+;;; INITIALIZATION COMPONENTS
+;;; #########################
 ;;; **********
 ;;; initialize
 ;;; **********
@@ -80,6 +79,10 @@
     (printout t "Input File Name" crlf)
     (assert (filename (read)))
 )
+
+;;; *****************
+;;; read problem file
+;;; *****************
 
 (defrule read-file
 
@@ -107,6 +110,10 @@
     (close data)
 )
 
+;;; **************
+;;; generate board
+;;; **************
+
 (defrule generate-board
 
     ?f <- (phase generate-board)
@@ -118,8 +125,6 @@
     (retract ?f)
     (assert (phase move-start))
 
-    (assert (last-sentence (idx 0)))
-    (assert (sentence-counter (idx 1)))
     (assert (last-move (id -1)))
     (bind $?sc nil)
     (bind $?sc (delete-member$ (create$ $?sc) $?sc))
@@ -136,6 +141,13 @@
     (assert (sentence (id ?sc) (count ?mc)))
     (assert (move-pool (id ?sc)))
 )
+
+;;; ###############
+;;; MOVE COMPONENTS
+;;; ###############
+;;; **********
+;;; first move
+;;; **********
 
 (defrule move-start
 
@@ -157,216 +169,9 @@
     (modify ?l (id ?id))
 )
 
-(defrule probe-cell-mine
-
-    (declare (salience 10))
-
-    ?f <- (phase probe-cell)
-    (last-move (id ?id))
-    (cell (id ?id) (row ?r) (column ?c))
-    (mine (row ?r) (column ?c))
-
-    =>
-
-    (retract ?f)
-    (assert (phase print))
-    (assert (phase lose))
-    (assert (print 1))
-    (assert (detonate ?id))
-)
-
-(defrule probe-cell-value
-
-    ?f <- (phase probe-cell)
-    (last-move (id ?id))
-    (cell (id ?id) (row ?r) (column ?c))
-    ?v <- (cell-value (id ?id))
-
-    =>
-
-    (retract ?f)
-    (assert (phase check-value))
-
-    (modify ?v (value 0))
-    (assert (sentence-cell))
-    
-    (loop-for-count (?cnt -1 1) do
-        (loop-for-count (?cnt2 -1 1) do
-            (if (not (and (= ?cnt 0) (= ?cnt2 0)))
-                then
-                (assert (check-cell (row (+ ?r ?cnt)) (column (+ ?c ?cnt2))))
-            )
-        )   
-    )
-)
-
-(defrule check-filter
-
-    (declare (salience 10))
-
-    (phase check-value)
-    (size ?s)
-    (or (or (check-cell (row ?r&:(< ?r 0)) (column ?c)) (check-cell (row ?r&:(>= ?r ?s)) (column ?c))) (or (check-cell (row ?r) (column ?c&:(< ?c 0))) (check-cell (row ?r) (column ?c&:(>= ?c ?s)))))
-    ?f <- (check-cell (row ?r) (column ?c))
-
-    =>
-
-    (retract ?f)
-
-)
-
-(defrule check-value-mine
-
-    (declare (salience 5))
-
-    (phase check-value)
-    ?cc <- (check-cell (row ?r) (column ?c))
-    ?sc <- (sentence-cell (id $?sid))
-    (mine (row ?r) (column ?c))
-    (cell (id ?id) (row ?r) (column ?c))
-
-    (last-move (id ?lid))
-    ?cv <- (cell-value (id ?lid) (value ?v))
-
-    =>
-
-    (retract ?cc)
-    (modify ?sc (id (insert$ (create$ $?sid) 1 ?id)))
-    (modify ?cv (value (+ ?v 1)))
-
-)
-
-(defrule check-value
-
-    (phase check-value)
-    ?cc <- (check-cell (row ?r) (column ?c))
-    ?sc <- (sentence-cell (id $?sid))
-    (cell (id ?id) (row ?r) (column ?c))
-
-    =>
-
-    (retract ?cc)
-    (modify ?sc (id (insert$ (create$ $?sid) 1 ?id)))
-)
-
-(defrule end-check
-
-    (declare (salience -5))
-
-    ?f <- (phase check-value)
-    (not (check-cell (row $?) (column $?)))
-    ?sc <- (sentence-cell (id $?sid))
-    ?ls <- (last-sentence(idx ?idx))
-    ?scx <- (sentence-counter(idx ?cidx))
-
-    (last-move (id ?lid))
-    (cell-value (id ?lid) (value ?v))
-
-    =>
-
-    (retract ?f)
-    (retract ?sc)
-    (assert (phase update-knowledge))
-    (modify ?ls (idx (+ ?cidx 1)))
-    (modify ?scx (idx (+ ?cidx 2)))
-
-    (assert (sentence (id ?lid) (count 0)))
-    (assert (sentence (id $?sid) (count ?v)))
-)
-
-(defrule sentence-subtraction
-
-    (declare (salience 20))
-
-    (phase update-knowledge)
-    ?s1 <- (sentence (id $?sid&:(> (length$ (create$ $?sid)) 1)) (count ?v))
-    ?s2 <- (sentence (id $?sid2&:(and (neq (create$ $?sid2) (create$ $?sid)) (subsetp (create$ $?sid2) (create$ $?sid)))) (count ?v2))
-
-    =>
-
-    (if (subsetp (create$ $?sid2) (create$ $?sid))
-        then
-        (bind $?sid3 (create$ $?sid))
-        (loop-for-count (?cnt 1 (length$ $?sid2)) do
-            (bind $?sid3 (delete-member$ $?sid3 (nth$ ?cnt $?sid2)))
-        )
-        (modify ?s1 (id $?sid3) (count (- ?v ?v2)))
-    )
-)
-
-
-(defrule sentence-atom-safe
-
-    (declare (salience 10))
-
-    (phase update-knowledge)
-    ?s <- (sentence (id $?id&:(> (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt 0)))
-
-    =>
-
-    (retract ?s)
-
-    (loop-for-count (?cnt 1 (length$ $?id))
-        (bind ?idn (nth$ ?cnt (create$ $?id)))
-        (assert (sentence (id ?idn) (count 0)))
-        (assert (mark-safe (id ?idn)))
-    )
-)
-
-(defrule sentence-atom-mine
-
-    (declare (salience 10))
-
-    (phase update-knowledge)
-    ?s <- (sentence (id $?id&:(> (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt (length$ (create$ $?id)))))
-
-    =>
-
-    (retract ?s)
-
-    (loop-for-count (?cnt 1 (length$ $?id))
-        (bind ?idn (nth$ ?cnt (create$ $?id)))
-        (assert (sentence (id ?idn) (count 1)))
-    )
-)
-
-(defrule atom-safe
-
-    (declare (salience 5))
-    (phase update-knowledge)
-    ?s <- (sentence (id $?id&:(= (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt 0)))
-    (not (mark-safe (id ?idm&:(= ?idm (nth$ 1 $?id)))))
-
-    =>
-
-    (assert (mark-safe (id (nth$ 1 $?id))))
-)
-
-(defrule atom-mine
-
-    (declare (salience 5))
-
-    (phase update-knowledge)
-    ?s <- (sentence (id $?id&:(= (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt 1)))
-    (not (mark-mine (id ?idm&:(= ?idm (nth$ 1 $?id)))))
-    ?mp <- (move-pool (id $?mpid))
-
-    =>
-    
-    (bind ?idn (nth$ 1 $?id))
-    (assert (mark-mine (id ?idn)))
-    (modify ?mp (id (delete-member$ (create$ $?mpid) ?idn)))
-)
-
-(defrule end-sentence-subtraction
-    
-    ?f <- (phase update-knowledge)
-
-    =>
-
-    (retract ?f)
-    (assert (phase trans-move))
-)
+;;; ******************************
+;;; safe move AKA select safe marked cell
+;;; ******************************
 
 (defrule move-safe
 
@@ -388,6 +193,10 @@
     (assert (move (id ?id)))
     (modify ?l (id ?id))
 )
+
+;;; *********************************************************
+;;; probability move, used when there are no safe marked cell
+;;; *********************************************************
 
 (defrule move-prob
 
@@ -414,15 +223,272 @@
     (modify ?l (id ?id))
 )
 
-(defrule trans-move
+;;; ################
+;;; PROBE COMPONENTS
+;;; ################
+;;; **************************************************
+;;; check selected cell if selected cell contains mine
+;;; **************************************************
 
-    ?f <- (phase trans-move)
+(defrule probe-cell-mine
+
+    (declare (salience 10))
+
+    ?f <- (phase probe-cell)
+    (last-move (id ?id))
+    (cell (id ?id) (row ?r) (column ?c))
+    (mine (row ?r) (column ?c))
 
     =>
 
     (retract ?f)
-    (assert (phase move))
+    (assert (phase print))
+    (assert (phase lose))
+    (assert (print 1))
+    (assert (detonate ?id))
 )
+
+;;; *******************************************************
+;;; make cell check statement for cell around selected cell
+;;; *******************************************************
+
+(defrule probe-cell-value
+
+    ?f <- (phase probe-cell)
+    (last-move (id ?id))
+    (cell (id ?id) (row ?r) (column ?c))
+    ?v <- (cell-value (id ?id))
+
+    =>
+
+    (retract ?f)
+    (assert (phase check-value))
+
+    (modify ?v (value 0))
+    (assert (sentence-cell))
+    
+    (loop-for-count (?cnt -1 1) do
+        (loop-for-count (?cnt2 -1 1) do
+            (if (not (and (= ?cnt 0) (= ?cnt2 0)))
+                then
+                (assert (check-cell (row (+ ?r ?cnt)) (column (+ ?c ?cnt2))))
+            )
+        )   
+    )
+)
+
+;;; ****************************************
+;;; delete out of board cell check statement
+;;; ****************************************
+
+(defrule check-filter
+
+    (declare (salience 10))
+
+    (phase check-value)
+    (size ?s)
+    (or (or (check-cell (row ?r&:(< ?r 0)) (column ?c)) (check-cell (row ?r&:(>= ?r ?s)) (column ?c))) (or (check-cell (row ?r) (column ?c&:(< ?c 0))) (check-cell (row ?r) (column ?c&:(>= ?c ?s)))))
+    ?f <- (check-cell (row ?r) (column ?c))
+
+    =>
+
+    (retract ?f)
+
+)
+
+;;; ************************************************************************
+;;; add value if checked cell contains mine and retract cell check statement
+;;; ************************************************************************
+
+(defrule check-value-mine
+
+    (declare (salience 5))
+
+    (phase check-value)
+    ?cc <- (check-cell (row ?r) (column ?c))
+    ?sc <- (sentence-cell (id $?sid))
+    (mine (row ?r) (column ?c))
+    (cell (id ?id) (row ?r) (column ?c))
+
+    (last-move (id ?lid))
+    ?cv <- (cell-value (id ?lid) (value ?v))
+
+    =>
+
+    (retract ?cc)
+    (modify ?sc (id (insert$ (create$ $?sid) 1 ?id)))
+    (modify ?cv (value (+ ?v 1)))
+
+)
+
+;;; ****************************************************************
+;;; retract cell chcek statement if checked cell doesnt contain mine
+;;; ****************************************************************
+
+(defrule check-value
+
+    (phase check-value)
+    ?cc <- (check-cell (row ?r) (column ?c))
+    ?sc <- (sentence-cell (id $?sid))
+    (cell (id ?id) (row ?r) (column ?c))
+
+    =>
+
+    (retract ?cc)
+    (modify ?sc (id (insert$ (create$ $?sid) 1 ?id)))
+)
+
+;;; *************
+;;; make sentence
+;;; *************
+
+(defrule end-check
+
+    (declare (salience -5))
+
+    ?f <- (phase check-value)
+    (not (check-cell (row $?) (column $?)))
+    ?sc <- (sentence-cell (id $?sid))
+
+    (last-move (id ?lid))
+    (cell-value (id ?lid) (value ?v))
+
+    =>
+
+    (retract ?f)
+    (retract ?sc)
+    (assert (phase update-knowledge))
+
+    (assert (sentence (id ?lid) (count 0)))
+    (assert (sentence (id $?sid) (count ?v)))
+)
+
+;;; ################################
+;;; KNOWLEDGE ACQUISITION COMPONENTS
+;;; ################################
+;;; *********************************************************************
+;;; sentence subtraction (ex: ({A, B, C} = 2) - ({B, C} = 1) = ({A} = 1))
+;;; *********************************************************************
+
+(defrule sentence-subtraction
+
+    (declare (salience 20))
+
+    (phase update-knowledge)
+    ?s1 <- (sentence (id $?sid&:(> (length$ (create$ $?sid)) 1)) (count ?v))
+    ?s2 <- (sentence (id $?sid2&:(and (neq (create$ $?sid2) (create$ $?sid)) (subsetp (create$ $?sid2) (create$ $?sid)))) (count ?v2))
+
+    =>
+
+    (if (subsetp (create$ $?sid2) (create$ $?sid))
+        then
+        (bind $?sid3 (create$ $?sid))
+        (loop-for-count (?cnt 1 (length$ $?sid2)) do
+            (bind $?sid3 (delete-member$ $?sid3 (nth$ ?cnt $?sid2)))
+        )
+        (modify ?s1 (id $?sid3) (count (- ?v ?v2)))
+    )
+)
+
+;;; ************************************************************
+;;; atomize safe sentence (ex: ({A, B} = 0) -> {A} = 0, {B} = 0)
+;;; ************************************************************
+
+(defrule sentence-atom-safe
+
+    (declare (salience 10))
+
+    (phase update-knowledge)
+    ?s <- (sentence (id $?id&:(> (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt 0)))
+
+    =>
+
+    (retract ?s)
+
+    (loop-for-count (?cnt 1 (length$ $?id))
+        (bind ?idn (nth$ ?cnt (create$ $?id)))
+        (assert (sentence (id ?idn) (count 0)))
+        (assert (mark-safe (id ?idn)))
+    )
+)
+
+;;; ************************************************************
+;;; atomize mine sentence (ex: ({A, B} = 2) -> {A} = 1, {B} = 1)
+;;; ************************************************************
+
+(defrule sentence-atom-mine
+
+    (declare (salience 10))
+
+    (phase update-knowledge)
+    ?s <- (sentence (id $?id&:(> (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt (length$ (create$ $?id)))))
+
+    =>
+
+    (retract ?s)
+
+    (loop-for-count (?cnt 1 (length$ $?id))
+        (bind ?idn (nth$ ?cnt (create$ $?id)))
+        (assert (sentence (id ?idn) (count 1)))
+    )
+)
+
+;;; **********************
+;;; mark A safe if {A} = 0
+;;; **********************
+
+(defrule atom-safe
+
+    (declare (salience 5))
+    (phase update-knowledge)
+    ?s <- (sentence (id $?id&:(= (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt 0)))
+    (not (mark-safe (id ?idm&:(= ?idm (nth$ 1 $?id)))))
+
+    =>
+
+    (assert (mark-safe (id (nth$ 1 $?id))))
+)
+
+;;; **************************************************
+;;; mark A mine if {A} = 1 and make move A unavailable
+;;; **************************************************
+
+(defrule atom-mine
+
+    (declare (salience 5))
+
+    (phase update-knowledge)
+    ?s <- (sentence (id $?id&:(= (length$ (create$ $?id)) 1)) (count ?cnt&:(= ?cnt 1)))
+    (not (mark-mine (id ?idm&:(= ?idm (nth$ 1 $?id)))))
+    ?mp <- (move-pool (id $?mpid))
+
+    =>
+    
+    (bind ?idn (nth$ 1 $?id))
+    (assert (mark-mine (id ?idn)))
+    (modify ?mp (id (delete-member$ (create$ $?mpid) ?idn)))
+)
+
+;;; ****************************************
+;;; end of one move, transition to next move
+;;; ****************************************
+
+(defrule end-sentence-subtraction
+    
+    ?f <- (phase update-knowledge)
+
+    =>
+
+    (retract ?f)
+    (assert (phase trans-move))
+)
+
+;;; #####################
+;;; TRANSITION COMPONENTS
+;;; #####################
+;;; ******************************************
+;;; check board condition if no move available
+;;; ******************************************
 
 (defrule check-con
 
@@ -438,6 +504,10 @@
 
     (assert (mine-correct 0))
 )
+
+;;; *************************
+;;; check flagged mine = mine
+;;; *************************
 
 (defrule check-won
 
@@ -456,6 +526,10 @@
     (assert (mine-correct (+ ?cnt 1)))
 )
 
+;;; *********************************************
+;;; if count(flagged mine) = count(mine) then win
+;;; *********************************************
+
 (defrule won
 
     (declare (salience 25))
@@ -471,6 +545,10 @@
     (assert (phase print))
     (assert (print 1))
 )
+
+;;; *********************************
+;;; if flagged mine != mine then lose
+;;; *********************************
 
 (defrule check-lose
 
@@ -488,6 +566,28 @@
     (assert (phase print))
     (assert (print 1))
 )
+
+;;; ****************************************
+;;; if nothing happen proceed into next move
+;;; ****************************************
+
+(defrule trans-move
+
+    ?f <- (phase trans-move)
+
+    =>
+
+    (retract ?f)
+    (assert (phase move))
+)
+
+;;; ################
+;;; PRINT COMPONENTS
+;;; ################
+;;; ********************
+;;; print detonated mine
+;;; ********************
+
 (defrule print-detonate
 
     (declare (salience 10))
@@ -507,6 +607,10 @@
     (printout t "x")
 )
 
+;;; **********************************
+;;; print detonated mine on end of row
+;;; **********************************
+
 (defrule print-detonate-eoc
 
     (declare (salience 20))
@@ -525,7 +629,9 @@
     (printout t "x" crlf)
 )
 
-
+;;; ******************
+;;; print flagged mine
+;;; ******************
 
 (defrule print-flag
 
@@ -545,6 +651,10 @@
     (printout t "f")
 )
 
+;;; ********************************
+;;; print flagged mine on end of row
+;;; ********************************
+
 (defrule print-flag-eoc
 
     (declare (salience 20))
@@ -562,6 +672,10 @@
     (printout t "f" crlf)
 )
 
+;;; ***********
+;;; print space
+;;; ***********
+
 (defrule print-space
 
     ?f <- (phase print-space)
@@ -572,6 +686,10 @@
     (assert (phase print))
     (printout t " ")
 )
+
+;;; ****************
+;;; print cell value
+;;; ****************
 
 (defrule print-value
 
@@ -590,7 +708,11 @@
     
 )
 
-(defrule print-value-eoc
+;;; *********************************
+;;; print cell value on end of row
+;;; *********************************
+
+(defrule print-value-eor
 
     (declare (salience 10))
 
@@ -609,6 +731,10 @@
     
 )
 
+;;; ***********************
+;;; print if cell value nil
+;;; ***********************
+
 (defrule print-value-nil
 
     ?f <- (phase print)
@@ -626,7 +752,11 @@
     
 )
 
-(defrule print-value-nil-eoc
+;;; *************************************
+;;; print on end of row if cell value nil
+;;; *************************************
+
+(defrule print-value-nil-eor
 
     (declare (salience 10))
 
@@ -645,6 +775,10 @@
     
 )
 
+;;; **************
+;;; print won text
+;;; **************
+
 (defrule print-won
 
     (declare (salience -20))
@@ -656,6 +790,10 @@
 
     (printout t "won" crlf)
 )
+
+;;; **************
+;;; print lose text
+;;; **************
 
 (defrule print-lose
 

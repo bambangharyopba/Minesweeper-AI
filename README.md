@@ -7,7 +7,6 @@
 ## to-do
 - Steps output
 - Improve move-prob (currently random)
-- Improve documentation
 - Make GUI
 
 ## Known Bugs
