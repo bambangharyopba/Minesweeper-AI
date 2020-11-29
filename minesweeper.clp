@@ -116,7 +116,7 @@
     =>
 
     (retract ?f)
-    (assert (phase move))
+    (assert (phase move-start))
 
     (assert (last-sentence (idx 0)))
     (assert (sentence-counter (idx 1)))
@@ -137,9 +137,9 @@
     (assert (move-pool (id ?sc)))
 )
 
-(defrule move-random
+(defrule move-start
 
-    ?f <- (phase move)
+    ?f <- (phase move-start)
     ?l <- (last-move (id $?))
     ?mp <- (move-pool (id $?mpid))
     (size ?s)
@@ -148,9 +148,8 @@
 
     (retract ?f)
     (assert (phase probe-cell))
-
-    (bind ?n (+ (mod (random) (length$ (create$ $?mpid))) 1))
-    (bind ?id (nth$ ?n (create$ $?mpid)))
+    
+    (bind ?id 1)
 
     (modify ?mp (id (delete-member$ (create$ $?mpid) ?id)))
 
