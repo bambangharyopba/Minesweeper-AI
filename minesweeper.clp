@@ -36,6 +36,14 @@
     (slot id) ;; cell id
 )
 
+(deftemplate last-sub-move
+    (slot id)
+)
+
+(deftemplate sub-move
+    (slot id)
+)
+
 ;; Flagged Mine
 (deftemplate mark-mine
     (slot id) ;;; cell id
@@ -49,6 +57,10 @@
 ;; Sentence Cell (ex: {A, B, C, D}) used to make sentence
 (deftemplate sentence-cell
     (multislot id) ;; cell ids
+)
+
+(deftemplate sub-sentence-cell
+    (multislot id)
 )
 
 ;; Sentence (ex: {A, B, C} = 2)
@@ -357,10 +369,189 @@
 
     (retract ?f)
     (retract ?sc)
+    (if (= ?v 0)
+        then
+        (loop-for-count (?cnt 1 (length$ ?sid)) do
+            (assert (sub-move (id (nth$ ?cnt ?sid))))
+        )
+        (assert (last-sub-move (id -1)))
+        (assert (phase sub-move))
+        else
+        (assert (phase update-knowledge))
+    )
+
+    (assert (sentence (id ?lid) (count 0)))
+    (assert (sentence (id $?sid) (count ?v)))
+
+)
+
+;;; ###########################
+;;; Under construction
+;;; ##########################
+
+(defrule sub-move
+
+    ?f <- (phase sub-move)
+    ?sm <- (sub-move (id ?id))
+    ?lsm <- (last-sub-move (id $?))
+    ?mp <- (move-pool(id $?mpid))
+     
+    =>
+
+    (retract ?f)
+    (retract ?sm)
+
+    (modify ?mp (id (delete-member$ (create$ $?mpid) ?id)))
+
+    (modify ?lsm (id ?id))
+    (assert (move (id ?id)))
+    (assert (phase sub-probe-cell))    
+)
+
+(defrule sub-probe-cell-value
+
+    ?f <- (phase sub-probe-cell)
+    (last-sub-move (id ?id))
+    (cell (id ?id) (row ?r) (column ?c))
+    ?v <- (cell-value (id ?id))
+
+    =>
+
+    (retract ?f)
+    (assert (phase sub-check-value))
+
+    (modify ?v (value 0))
+    (assert (sub-sentence-cell))
+    
+    (loop-for-count (?cnt -1 1) do
+        (loop-for-count (?cnt2 -1 1) do
+            (if (not (and (= ?cnt 0) (= ?cnt2 0)))
+                then
+                (assert (check-cell (row (+ ?r ?cnt)) (column (+ ?c ?cnt2))))
+            )
+        )   
+    )
+)
+
+
+(defrule sub-check-filter
+
+    (declare (salience 10))
+
+    (phase sub-check-value)
+    (size ?s)
+    (or (or (check-cell (row ?r&:(< ?r 0)) (column ?c)) (check-cell (row ?r&:(>= ?r ?s)) (column ?c))) (or (check-cell (row ?r) (column ?c&:(< ?c 0))) (check-cell (row ?r) (column ?c&:(>= ?c ?s)))))
+    ?f <- (check-cell (row ?r) (column ?c))
+
+    =>
+
+    (retract ?f)
+
+)
+
+(defrule sub-check-value-mine
+
+    (declare (salience 5))
+
+    (phase sub-check-value)
+    ?cc <- (check-cell (row ?r) (column ?c))
+    ?sc <- (sub-sentence-cell (id $?sid))
+    (mine (row ?r) (column ?c))
+    (cell (id ?id) (row ?r) (column ?c))
+
+    (last-sub-move (id ?lid))
+    ?cv <- (cell-value (id ?lid) (value ?v))
+
+    =>
+
+    (retract ?cc)
+    (modify ?sc (id (insert$ (create$ $?sid) 1 ?id)))
+    (modify ?cv (value (+ ?v 1)))
+
+)
+
+(defrule sub-check-value
+
+    (phase sub-check-value)
+    ?cc <- (check-cell (row ?r) (column ?c))
+    ?sc <- (sub-sentence-cell (id $?sid))
+    (cell (id ?id) (row ?r) (column ?c))
+
+    =>
+
+    (retract ?cc)
+    (modify ?sc (id (insert$ (create$ $?sid) 1 ?id)))
+)
+
+(defrule sub-end-check
+
+    (declare (salience -5))
+
+    ?f <- (phase sub-check-value)
+    (not (check-cell (row $?) (column $?)))
+    ?sc <- (sub-sentence-cell (id $?sid))
+    (last-sub-move (id ?lid))
+    (cell-value (id ?lid) (value ?v))
+    (or (sub-move (id $?)) (cell-value (id ?lid) (value ?v&:(= ?v 0))))
+    ?mp <- (move-pool (id $?mpid))
+
+
+    =>
+
+    (retract ?f)
+    (retract ?sc)
+    (if (= ?v 0)
+        then
+        (loop-for-count (?cnt 1 (length$ ?sid)) do
+            (if (subsetp (create$ (nth$ ?cnt ?sid)) $?mpid)
+                then
+                (assert (sub-move (id (nth$ ?cnt ?sid))))
+            )
+        )
+    )
+    (assert (phase sub-move))
+
+    (assert (sentence (id ?lid) (count 0)))
+    (assert (sentence (id $?sid) (count ?v)))
+
+)
+
+(defrule sub-end
+    
+    ?f <- (phase sub-move)
+    (not (sub-move (id $?)))
+
+    =>
+
+    (retract ?f)
+
+    (assert (phase update-knowledge))
+
+)
+
+(defrule end-sub-move
+
+    (declare (salience -5))
+
+    ?f <- (phase sub-check-value)
+    (not (check-cell (row $?) (column $?)))
+    ?sc <- (sub-sentence-cell (id $?sid))
+    (not (sub-move (id $?)))
+    ?lsm <- (last-sub-move (id ?lid))
+
+    (cell-value (id ?lid) (value ?v))
+
+    =>
+
+    (retract ?f)
+    (retract ?sc)
+    (retract ?lsm)
+
     (assert (phase update-knowledge))
 
     (assert (sentence (id ?lid) (count 0)))
     (assert (sentence (id $?sid) (count ?v)))
+
 )
 
 ;;; ################################
