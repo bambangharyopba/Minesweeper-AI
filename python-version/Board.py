@@ -38,7 +38,7 @@ class Board():
                     line = f.readline()
                     if not line:
                         break
-                    line = [int(x) for x in line.strip().split(",")]
+                    line = [int(x.strip()) for x in line.strip().split(",")]
                     self._matrix[line[0]][line[1]] = 'm'
             
             self._initValue()
