@@ -273,7 +273,7 @@ class Game():
         self.foundmines = 0
         if (len(moves) != 0):
             while (len(next_move) != 0):
-                self.board[next_move[1]][next_move[2]].update(move=next_move[0],x=next_move[1],y=next_move[2])
+                self.board[next_move[1]][next_move[2]].update()
         for y in range(self.rows):
             for x in range(self.columns):
                 self.board[y][x].update()
