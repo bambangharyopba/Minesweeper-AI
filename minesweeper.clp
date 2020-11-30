@@ -725,6 +725,9 @@
 
     (declare (salience 25))
 
+    (last-move(id ?id))
+    (cell (id ?id) (row ?r) (column ?c))
+
     ?f <- (phase check-con)
     (mine-count ?c)
     (mine-correct ?c)
@@ -735,6 +738,12 @@
     (assert (phase won))
     (assert (phase print))
     (assert (print 1))
+
+    (printout t "(")
+    (printout t ?r)
+    (printout t ",")
+    (printout t ?c)
+    (printout t ")" crlf)
 )
 
 ;;; *********************************
@@ -744,6 +753,9 @@
 (defrule check-lose
 
     (declare (salience 20))
+
+    (last-move(id ?lid))
+    (cell (id ?lid) (row ?lr) (column ?lc))
 
     ?f <- (phase check-con)
     (mark-mine (id ?id))
@@ -756,6 +768,12 @@
     (assert (phase lose))
     (assert (phase print))
     (assert (print 1))
+
+    (printout t "(")
+    (printout t ?lr)
+    (printout t ",")
+    (printout t ?lc)
+    (printout t ")" crlf)
 )
 
 ;;; ****************************************
@@ -764,14 +782,22 @@
 
 (defrule trans-move
 
+    (last-move(id ?id))
+    (cell (id ?id) (row ?r) (column ?c))
     ?f <- (phase trans-move)
 
     =>
 
     (retract ?f)
-    ; (assert (phase move))
     (assert (phase print))
     (assert (print 1))
+
+    (printout t "(")
+    (printout t ?r)
+    (printout t ",")
+    (printout t ?c)
+    (printout t ")" crlf)
+
 )
 
 ;;; ################
@@ -968,6 +994,10 @@
     
 )
 
+;;; *********************
+;;; print on end of board
+;;; *********************
+
 (defrule print-end
 
     ?f <- (phase print)
@@ -975,7 +1005,6 @@
 
     =>
     
-    ; (retract ?f)
     (retract ?p)
     
     (printout t crlf)
