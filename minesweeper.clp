@@ -104,7 +104,7 @@
     
     (bind ?d (readline data))
     (while (neq ?d EOF)
-        (assert (mine (row (nth$ 1 (explode$ ?d))) (column (nth$ 2 (explode$ ?d)))))
+        (assert (mine  (row (nth$ 1 (explode$ (sub-string 1 1 ?d)))) (column (nth$ 1 (explode$ (sub-string 4 4 ?d))))))
         (bind ?d (readline data)))
 
     (close data)
