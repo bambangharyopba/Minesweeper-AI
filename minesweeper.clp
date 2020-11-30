@@ -578,7 +578,9 @@
     =>
 
     (retract ?f)
-    (assert (phase move))
+    ; (assert (phase move))
+    (assert (phase print))
+    (assert (print 1))
 )
 
 ;;; ################
@@ -773,6 +775,22 @@
 
     (printout t "." crlf)
     
+)
+
+(defrule print-end
+
+    ?f <- (phase print)
+    ?p <- (print $?)
+
+    =>
+    
+    ; (retract ?f)
+    (retract ?p)
+    
+    (printout t crlf)
+
+    (assert (phase move))
+
 )
 
 ;;; **************
